@@ -67,8 +67,8 @@ export async function POST(req) {
     `;
 
     const openai = new OpenAI({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.GOOGLE_API_KEY,
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     });
 
     //  const messages = [
@@ -84,13 +84,11 @@ export async function POST(req) {
 
     // 8. Generate a response using the chat model
     const response = await openai.chat.completions.create({
-      model: "deepseek/deepseek-chat-v3-0324:free",
+      model: "gemini-2.5-pro",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userQuery },
       ],
-      // Note: response_format is not a standard parameter for Gemini via this endpoint.
-      // The response will be in the standard OpenAI chat completion format.
       response_format: { type: "json_object" },
     });
 
