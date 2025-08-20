@@ -11,9 +11,7 @@
 }
 
 
-body{
-  overflow: hidden;
-}
+
 
 @custom-variant dark (&:is(.dark *));
 
