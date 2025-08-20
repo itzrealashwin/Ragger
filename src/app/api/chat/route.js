@@ -4,7 +4,7 @@ import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { TaskType } from "@google/generative-ai";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import OpenAI from "openai";
-const client = new OpenAI();
+// const client = new OpenAI();
 
 /**
  * Handles POST requests to /api/chat
@@ -67,8 +67,7 @@ export async function POST(req) {
     `;
 
     const openai = new OpenAI({
-      apiKey:
-        "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",
+      apiKey: process.env.OPENROUTER_API_KEY,
       baseURL: "https://openrouter.ai/api/v1",
     });
 
