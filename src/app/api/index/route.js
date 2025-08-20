@@ -1,17 +1,109 @@
 import "dotenv/config";
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { OpenAIEmbeddings } from "@langchain/openai";
+
 import { TaskType } from "@google/generative-ai";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import { CSVLoader } from "@langchain/community/document_loaders/fs/csv";
+import { RecursiveUrlLoader } from "@langchain/community/document_loaders/web/recursive_url";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { Document } from "@langchain/core/documents";
 
+async function insertInBatches(docs, embeddings, batchSize = 100) {
+  for (let i = 0; i < docs.length; i += batchSize) {
+    const batch = docs.slice(i, i + batchSize);
+
+    await QdrantVectorStore.fromDocuments(batch, embeddings, {
+      url: CONFIG.QDRANT_URL,
+      apiKey: CONFIG.QDRANT_API_KEY,
+      collectionName: CONFIG.DEFAULT_COLLECTION,
+    });
+
+    console.log(`✅ Inserted batch ${i / batchSize + 1}`);
+  }
+}
+
+/* ---------------- Config ---------------- */
+const CONFIG = {
+  QDRANT_URL: process.env.QDRANT_URL,
+  QDRANT_API_KEY: process.env.QDRANT_API_KEY,
+  EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || "text-embedding-3-large",
+  CHUNK_SIZE: 1000,
+  CHUNK_OVERLAP: 200,
+  DEFAULT_COLLECTION: "ragCollection",
+};
+
+/* ---------------- Helpers ---------------- */
+function cleanDocuments(docs, fallbackSource = "") {
+  return docs.map((d) => {
+    const meta = d.metadata || {};
+    const outMeta = {};
+
+    if (meta.source) outMeta.source = meta.source;
+    if (meta.url) outMeta.url = meta.url;
+    if (meta.title) outMeta.title = meta.title;
+
+    if (!outMeta.source && fallbackSource) outMeta.source = fallbackSource;
+
+    return new Document({
+      pageContent: d.pageContent ?? "",
+      metadata: outMeta,
+    });
+  });
+}
+
+async function splitDocuments(rawDocs) {
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: CONFIG.CHUNK_SIZE,
+    chunkOverlap: CONFIG.CHUNK_OVERLAP,
+  });
+  return splitter.splitDocuments(rawDocs);
+}
+
+/* ---------------- Loaders ---------------- */
+async function loadText(text) {
+  return [
+    new Document({
+      pageContent: text,
+      metadata: { source: "pasted-text" },
+    }),
+  ];
+}
+
+async function loadPDF(file) {
+  console.log(`📄 Loading PDF: ${file.name}`);
+  const loader = new PDFLoader(file);
+  const rawDocs = await loader.load();
+  const split = await splitDocuments(rawDocs);
+  return cleanDocuments(split, file.name);
+}
+
+async function loadCSV(file) {
+  console.log(`📄 Loading CSV: ${file.name}`);
+  const loader = new CSVLoader(file);
+  const rawDocs = await loader.load();
+  const split = await splitDocuments(rawDocs);
+  return cleanDocuments(split, file.name);
+}
+
+async function loadWebsite(url) {
+  console.log(`🌐 Crawling website: ${url}`);
+  const loader = new RecursiveUrlLoader(url, {
+    maxDepth: 2,
+    excludeDirs: ["#"],
+  });
+  const rawDocs = await loader.load();
+  const split = await splitDocuments(rawDocs);
+  return cleanDocuments(split, url);
+}
+
+/* ---------------- API Handler ---------------- */
 export async function POST(req) {
   try {
     const formData = await req.formData();
-    const sourceType = formData.get("sourceType");
+    const sourceType = formData.get("sourceType")?.toLowerCase();
 
     if (!sourceType) {
       return NextResponse.json(
@@ -20,24 +112,24 @@ export async function POST(req) {
       );
     }
 
-    let docs;
+    let docs = [];
     let sourceName = "unknown";
 
-    // Determine which loader to use based on the source type
     switch (sourceType) {
-      case "text":
+      case "text": {
         const text = formData.get("text");
         if (!text)
           return NextResponse.json(
             { error: 'Text content is required for sourceType "text"' },
             { status: 400 }
           );
+        docs = await loadText(text);
         sourceName = "pasted-text";
-        docs = [{ pageContent: text, metadata: { source: sourceName } }];
         break;
+      }
 
-      case "file":
-        const file = formData.get("file"); // This is a File object
+      case "file": {
+        const file = formData.get("file");
         if (!file)
           return NextResponse.json(
             { error: 'A file is required for sourceType "file"' },
@@ -45,78 +137,65 @@ export async function POST(req) {
           );
         sourceName = file.name;
 
-        const fileBlob = new Blob([await file.arrayBuffer()], {
-          type: file.type,
-        });
-        let loader;
-
         if (file.type === "application/pdf") {
-          loader = new PDFLoader(fileBlob);
+          docs = await loadPDF(file);
         } else if (file.type === "text/csv") {
-          loader = new CSVLoader(fileBlob);
+          docs = await loadCSV(file);
         } else {
           return NextResponse.json(
             { error: "Unsupported file type. Please use PDF or CSV." },
             { status: 400 }
           );
         }
-
-        docs = await loader.load();
-        // Add the source to each document's metadata
-        docs.forEach((doc) => (doc.metadata.source = sourceName));
         break;
+      }
 
-      case "url":
+      case "url": {
         const url = formData.get("url");
         if (!url)
           return NextResponse.json(
             { error: 'A URL is required for sourceType "url"' },
             { status: 400 }
           );
+        docs = await loadWebsite(url);
         sourceName = url;
-        const webLoader = new CheerioWebBaseLoader(url);
-        docs = await webLoader.load();
-        // Add the source to each document's metadata
-        docs.forEach((doc) => (doc.metadata.source = sourceName));
         break;
+      }
 
       default:
         return NextResponse.json(
-          { error: "Invalid sourceType provided" },
+          { error: "Invalid sourceType. Use 'text', 'file', or 'url'." },
           { status: 400 }
         );
     }
 
-    // Initialize the text splitter for chunking
-    const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1000,
-      chunkOverlap: 200,
-    });
+    if (!docs.length) {
+      return NextResponse.json(
+        { error: "No documents to insert" },
+        { status: 400 }
+      );
+    }
 
-    const splitDocs = await textSplitter.splitDocuments(docs);
-
-    // Initialize the Google Generative AI embeddings model
     const embeddings = new GoogleGenerativeAIEmbeddings({
-      apiKey: process.env.GOOGLE_API_KEY, // Make sure to add this to your .env.local
+      apiKey: process.env.GOOGLE_API_KEY,
       model: "text-embedding-004",
       taskType: TaskType.RETRIEVAL_DOCUMENT,
     });
+    // const embeddings = new OpenAIEmbeddings({ model: CONFIG.EMBEDDING_MODEL });
 
-    // Create and store the embeddings in Qdrant
-    await QdrantVectorStore.fromDocuments(splitDocs, embeddings, {
-      url: process.env.QDRANT_URL,
-      collectionName: "ragCollection",
-      apiKey: process.env.QDRANT_API_KEY, // Add this line
-    });
+    // 🔹 Store in Qdrant in batches (100 docs per request)
+    await insertInBatches(docs, embeddings, 100);
 
     return NextResponse.json({
       success: true,
       message: `Indexing of ${sourceName} done.`,
+      inserted: docs.length,
+      collectionName: CONFIG.DEFAULT_COLLECTION,
     });
   } catch (error) {
-    console.error("Error during indexing:", error);
+    console.error("🔥 Error during indexing:", error);
     return NextResponse.json(
-      { error: "Failed to index documents." },
+      { error: "Failed to index documents.", details: error.message },
       { status: 500 }
     );
   }

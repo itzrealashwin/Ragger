@@ -4,6 +4,7 @@ import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { TaskType } from "@google/generative-ai";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import OpenAI from "openai";
+const client = new OpenAI();
 
 /**
  * Handles POST requests to /api/chat
@@ -42,22 +43,21 @@ export async function POST(req) {
     );
 
     // 4. Create a retriever to search for the top 3 most relevant documents
-    const retriever = vectorStore.asRetriever({ k: 3 });
+    const retriever = vectorStore.asRetriever({ k: 10 });
 
     // 5. Retrieve the relevant chunks (documents) from Qdrant
     const relevantChunks = await retriever.invoke(userQuery);
 
     // 6. Construct a clear system prompt with the retrieved context
-  const SYSTEM_PROMPT = `
+    const SYSTEM_PROMPT = `
       You are an AI assistant. Your task is to answer the user's query based ONLY on the
       following context provided. Do not use any external knowledge.
-
       If the context does not contain the answer, state clearly that you do not have enough information.
       
       Your response MUST be in a JSON format with the following structure:
       {
         "answer": "Your detailed answer based on the context.",
-        "sources": ["source1_from_metadata", "source2_from_metadata", ...]
+        "sources": []
       }
 
       Cite the sources of the information from the metadata if available in the "sources" array.
@@ -66,15 +66,26 @@ export async function POST(req) {
       ${JSON.stringify(relevantChunks)}
     `;
 
-    // 7. Initialize a client to communicate with the Gemini API
     const openai = new OpenAI({
-      apiKey: process.env.GOOGLE_API_KEY,
-      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKey:
+        "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",
+      baseURL: "https://openrouter.ai/api/v1",
     });
+
+    //  const messages = [
+    //   { role: "system", content: SYSTEM_PROMPT },
+    //   { role: "user", content: userQuery },
+    // ];
+
+    // const response = await client.chat.completions.create({
+    //   model: "gpt-4o",
+    //   messages,
+    //   // temperature: 0.2,
+    // });
 
     // 8. Generate a response using the chat model
     const response = await openai.chat.completions.create({
-      model: "gemini-2.5-pro", // Using a powerful Gemini model for generation
+      model: "deepseek/deepseek-chat-v3-0324:free",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userQuery },
