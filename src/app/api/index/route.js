@@ -15,7 +15,7 @@ async function insertInBatches(docs, embeddings, batchSize = 100) {
   for (let i = 0; i < docs.length; i += batchSize) {
     const batch = docs.slice(i, i + batchSize);
 
-    await QdrantVectorStore.fromDocuments(batch, embeddings, {
+    const response = await QdrantVectorStore.fromDocuments(batch, embeddings, {
       url: CONFIG.QDRANT_URL,
       apiKey: CONFIG.QDRANT_API_KEY,
       collectionName: CONFIG.DEFAULT_COLLECTION,
@@ -114,7 +114,6 @@ export async function POST(req) {
 
     let docs = [];
     let sourceName = "unknown";
-
     switch (sourceType) {
       case "text": {
         const text = formData.get("text");
@@ -124,7 +123,7 @@ export async function POST(req) {
             { status: 400 }
           );
         docs = await loadText(text);
-        sourceName = "pasted-text";
+        sourceName = text.slice(0, 20);
         break;
       }
 
@@ -184,13 +183,15 @@ export async function POST(req) {
     // const embeddings = new OpenAIEmbeddings({ model: CONFIG.EMBEDDING_MODEL });
 
     // 🔹 Store in Qdrant in batches (100 docs per request)
-    await insertInBatches(docs, embeddings, 100);
+    const response = await insertInBatches(docs, embeddings, 100);
+    console.log(response);
 
     return NextResponse.json({
       success: true,
       message: `Indexing of ${sourceName} done.`,
       inserted: docs.length,
       collectionName: CONFIG.DEFAULT_COLLECTION,
+      identity: sourceName,
     });
   } catch (error) {
     console.error("🔥 Error during indexing:", error);

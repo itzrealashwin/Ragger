@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useRef, useCallback } from "react";
 import { FileText, Globe, Upload, X } from "lucide-react";
@@ -10,17 +10,24 @@ import { motion, AnimatePresence } from "framer-motion";
 // Icon component for source types
 const SourceIcon = ({ type }) => {
   const iconProps = { className: "w-5 h-5" };
-  
+
   if (type === "Text") return <FileText {...iconProps} />;
   if (type === "URL") return <Globe {...iconProps} />;
-  return <Upload {...iconProps} />; 
+  return <Upload {...iconProps} />;
 };
 
-const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setIsSourceModalOpen}) => {
+const AddSourceModal = ({
+  isOpen,
+  onClose,
+  setIsLoading,
+  setLoadingMessage,
+  setIsSourceModalOpen,
+  onAddSource, // 👈 new callback
+}) => {
   const [textSource, setTextSource] = useState("");
   const [urlSource, setUrlSource] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [sources,setSources]  = useState([])
+  const [sources, setSources] = useState([]);
   const fileInputRef = useRef(null);
 
   const handleFileChange = useCallback((e) => {
@@ -29,63 +36,77 @@ const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setI
     }
   }, []);
 
-  const handleIndexSource = async (formData) => {
-    setIsLoading(true);
-    setLoadingMessage('Indexing source...');
-    try {
-      const response = await fetch('/api/index', {
-        method: 'POST',
-        body: formData,
-      });
+ const handleIndexSource = async (formData) => {
+  setIsLoading(true);
+  setLoadingMessage('Indexing source...');
 
-      const result = await response.json();
+  try {
+    const response = await fetch('/api/index', {
+      method: 'POST',
+      body: formData,
+    });
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to index source.');
-      }
-      
-      // Optimistically update the UI with the new source.
-      // In a production app, you might refetch the list of sources from your database.
-      const sourceName = formData.get('file')?.name || formData.get('url') || 'Pasted Text';
-      const sourceTypeRaw = formData.get('sourceType');
-      const sourceType = sourceTypeRaw.charAt(0).toUpperCase() + sourceTypeRaw.slice(1);
-      setSources(prev => [...prev, { name: sourceName, type: sourceType }]);
+    const result = await response.json();
 
-      setIsSourceModalOpen(false);
-
-    } catch (error) {
-      console.error('Error indexing source:', error);
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to index source.');
     }
-  };
+
+    const file = formData.get('file');
+    const url = formData.get('url');
+    const sourceTypeRaw = formData.get('sourceType') || '';
+
+    const sourceName = file?.name || url || textSource.slice(0,10);
+    const sourceType =
+      sourceTypeRaw.charAt(0).toUpperCase() + sourceTypeRaw.slice(1);
+
+    const newSource = { name: sourceName, type: sourceType,  };
+
+    // ✅ Use parent callback if provided, otherwise fallback to local state
+    if (typeof onAddSource === 'function') {
+      onAddSource(newSource);
+    } else {
+      setSources((prev) => [...prev, newSource]);
+    }
+
+    setIsSourceModalOpen(false);
+
+  } catch (error) {
+    console.error('❌ Error indexing source:', error);
+    alert(error.message || 'Something went wrong while indexing source.');
+  } finally {
+    setIsLoading(false);
+    setLoadingMessage('');
+  }
+};
+
 
   const handleAddText = () => {
     if (!textSource.trim()) return;
     const formData = new FormData();
-    formData.append('sourceType', 'text');
-    formData.append('text', textSource);
+    formData.append("sourceType", "text");
+    formData.append("text", textSource);
     handleIndexSource(formData);
-    setTextSource('');
+    setTextSource("");
   };
 
   const handleAddUrl = () => {
     if (!urlSource.trim()) return;
     const formData = new FormData();
-    formData.append('sourceType', 'url');
-    formData.append('url', urlSource);
+    formData.append("sourceType", "url");
+    formData.append("url", urlSource);
     handleIndexSource(formData);
-    setUrlSource('');
+    setUrlSource("");
   };
 
   const handleAddFile = () => {
     if (!selectedFile) return;
     const formData = new FormData();
-    formData.append('sourceType', 'file');
-    formData.append('file', selectedFile);
+    formData.append("sourceType", "file");
+    formData.append("file", selectedFile);
     handleIndexSource(formData);
     setSelectedFile(null);
-    if(fileInputRef.current) fileInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -104,16 +125,16 @@ const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setI
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl p-6 relative border border-gray-200 dark:border-gray-700"
           >
-            <motion.button 
+            <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={onClose} 
+              onClick={onClose}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <X className="w-6 h-6" />
             </motion.button>
-            
-            <motion.h2 
+
+            <motion.h2
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
@@ -121,7 +142,7 @@ const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setI
             >
               Add a new source
             </motion.h2>
-            
+
             <div className="space-y-6">
               {/* Text Input */}
               <motion.div
@@ -132,21 +153,21 @@ const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setI
                 <h3 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-white">
                   <SourceIcon type="Text" /> Paste Text
                 </h3>
-                <Textarea 
-                  value={textSource} 
-                  onChange={(e) => setTextSource(e.target.value)} 
+                <Textarea
+                  value={textSource}
+                  onChange={(e) => setTextSource(e.target.value)}
                   className="h-24 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                   placeholder="Paste content here..."
                 />
-                <Button 
-                  onClick={handleAddText} 
+                <Button
+                  onClick={handleAddText}
                   disabled={!textSource.trim()}
                   className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add Text Source
                 </Button>
               </motion.div>
-              
+
               {/* URL Input */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
@@ -156,22 +177,22 @@ const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setI
                 <h3 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-white">
                   <SourceIcon type="URL" /> From Website
                 </h3>
-                <Input 
-                  type="url" 
-                  value={urlSource} 
-                  onChange={(e) => setUrlSource(e.target.value)} 
+                <Input
+                  type="url"
+                  value={urlSource}
+                  onChange={(e) => setUrlSource(e.target.value)}
                   className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
-                  placeholder="https://example.com" 
+                  placeholder="https://example.com"
                 />
-                <Button 
-                  onClick={handleAddUrl} 
+                <Button
+                  onClick={handleAddUrl}
                   disabled={!urlSource.trim()}
                   className="mt-2 w-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Fetch from URL
                 </Button>
               </motion.div>
-              
+
               {/* File Upload */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
@@ -182,26 +203,26 @@ const AddSourceModal = ({ isOpen, onClose, setIsLoading, setLoadingMessage, setI
                   <SourceIcon type="File" /> Upload Document
                 </h3>
                 <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
-                    className="hidden" 
-                    accept=".pdf,.csv,.txt" 
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept=".pdf,.csv,.txt"
                   />
-                  <Button 
-                    onClick={() => fileInputRef.current?.click()} 
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
                     variant="outline"
                     className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
                   >
                     Choose a file
                   </Button>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {selectedFile ? selectedFile.name : 'PDF, CSV, or TXT'}
+                    {selectedFile ? selectedFile.name : "PDF, CSV, or TXT"}
                   </p>
                 </div>
-                <Button 
-                  onClick={handleAddFile} 
+                <Button
+                  onClick={handleAddFile}
                   disabled={!selectedFile}
                   className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >

@@ -11,14 +11,14 @@ import {
   Server,
   X,
   Plus,
-  BookMarked,
   ArrowRight,
+  Bot,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
 import { Textarea } from "@/components/ui/textarea";
 import AddSourceModal from "./AddSourceModal";
-// --- Main Application Component ---
+
 export default function PlaygroundPage() {
   const [ragData, setRagData] = useState([]);
   const [chatHistory, setChatHistory] = useState([]);
@@ -27,16 +27,21 @@ export default function PlaygroundPage() {
   const [loadingMessage, setLoadingMessage] = useState("");
   const [toastMessage, setToastMessage] = useState(null);
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
+  const [sources, setSources] = useState([]);
+
+  const [summary, setSummary] = useState("");
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
 
   const chatWindowRef = useRef(null);
 
-  // --- Utility & Lifecycle Functions ---
+  // Scroll chat automatically
   useEffect(() => {
     if (chatWindowRef.current) {
       chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
     }
   }, [chatHistory]);
 
+  // Grouped sources
   const groupedSources = useMemo(() => {
     const sourceMap = new Map();
     ragData.forEach((chunk) => {
@@ -55,6 +60,39 @@ export default function PlaygroundPage() {
     }));
   }, [ragData]);
 
+  // Fetch AI summary whenever ragData changes
+  useEffect(() => {
+    if (ragData.length === 0) {
+      setSummary("");
+      return;
+    }
+    console.log("RAG DATA", ragData);
+    
+    const fetchSummary = async () => {
+      setIsSummaryLoading(true);
+      setSummary("");
+      try {
+        const response = await fetch("/api/summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourceText: ragData[0].name }),
+        });
+        const result = await response.json();
+        setSummary(result.summary || "No summary available.");
+        console.log(result);
+        
+      } catch (error) {
+        console.error("Summary Error:", error);
+        setSummary("⚠️ Failed to fetch summary.");
+      } finally {
+        setIsSummaryLoading(false);
+      }
+    };
+
+    fetchSummary();
+  }, [ragData]);
+
+  // Handle chat
   const handleSendMessage = async () => {
     if (!userInput.trim() || isLoading) return;
 
@@ -62,12 +100,14 @@ export default function PlaygroundPage() {
       id: crypto.randomUUID(),
       sender: "user",
       text: userInput,
+      timestamp: new Date(),
     };
     setChatHistory((prev) => [...prev, userMessage]);
+
     const currentQuery = userInput;
     setUserInput("");
     setIsLoading(true);
-    setLoadingMessage("Searching sources...");
+    setLoadingMessage("Thinking...");
 
     try {
       const response = await fetch("/api/chat", {
@@ -77,30 +117,36 @@ export default function PlaygroundPage() {
       });
 
       const result = await response.json();
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(result.error || "Failed to get response.");
-      }
-      const parsed = JSON.parse(result.response); // now it's an object
-      console.log(parsed);
-      
+
+      const parsed = JSON.parse(result.response);
       const botResponse = {
         id: crypto.randomUUID(),
         sender: "bot",
-        text: parsed.answer, // ✅ now works
-        sources: parsed.sources || parsed.citations
+        text: parsed.answer,
+        sources: parsed.sources || parsed.citations,
+        timestamp: new Date(),
       };
 
-  
       setChatHistory((prev) => [...prev, botResponse]);
     } catch (error) {
       console.error("Chat Error:", error);
-      // You can add a toast notification for the error here
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "bot",
+          text: "⚠️ Something went wrong while fetching the answer.",
+          timestamp: new Date(),
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- UI Sub-Components ---
+  // Icon Renderer
   const SourceIcon = ({ type, className }) => {
     const baseClass = "w-5 h-5";
     switch (type) {
@@ -123,6 +169,16 @@ export default function PlaygroundPage() {
     }
   };
 
+  const handleAddSource = (newSource) => {
+    setSources((prev) => {
+      // If exists, update (loading → false). Otherwise, add new.
+      const existing = prev.find((s) => s.name === newSource.name);
+      if (existing) {
+        return prev.map((s) => (s.name === newSource.name ? newSource : s));
+      }
+      return [...prev, newSource];
+    });
+  };
   return (
     <>
       <AddSourceModal
@@ -131,10 +187,12 @@ export default function PlaygroundPage() {
         setIsLoading={setIsLoading}
         setLoadingMessage={setLoadingMessage}
         setIsSourceModalOpen={setIsSourceModalOpen}
+        onAddSource={handleAddSource} // 👈 new callback
       />
-      <div className="flex h-[calc(100vh-4rem)] bg-white dark:bg-gray-900 text-black dark:text-white">
+
+      <div className="grid grid-cols-12 h-[calc(100vh-4rem)] bg-white dark:bg-gray-900 text-black dark:text-white">
         {/* Left Panel: Sources */}
-        <aside className="w-1/3 max-w-sm bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col p-4">
+        <aside className="col-span-3 border-r border-gray-200 dark:border-gray-800 flex flex-col p-4">
           <Button
             onClick={() => setIsSourceModalOpen(true)}
             className="w-full flex items-center justify-center gap-2 mb-4 bg-indigo-600 hover:bg-indigo-700 text-white"
@@ -143,24 +201,28 @@ export default function PlaygroundPage() {
           </Button>
           <div className="flex-grow overflow-y-auto pr-2">
             <h2 className="text-lg font-semibold mb-2">Sources</h2>
-            {groupedSources.length === 0 ? (
+            {sources.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 <p>No sources added yet.</p>
                 <p className="text-sm">Click "+ Add New Source" to begin.</p>
               </div>
             ) : (
               <ul className="space-y-2">
-                {groupedSources.map((source) => (
+                {sources.map((source, idx) => (
                   <li
-                    key={source.source}
+                              onClick={() => setRagData([source])}
+
+                    key={idx}
                     className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg flex items-center gap-3 border border-gray-200 dark:border-gray-800"
                   >
-                    <SourceIcon type={source.sourceType} />
+                    <SourceIcon type={source.type} />
                     <div className="flex-1 overflow-hidden">
-                      <p className="font-semibold truncate">{source.source}</p>
-                      <p className="text-xs text-gray-500">
-                        {source.chunkCount} chunks
-                      </p>
+                      <p className="font-semibold truncate">{source.name}</p>
+                      {source.loading ? (
+                        <div className="animate-pulse mt-1 h-3 bg-gray-300 dark:bg-gray-700 rounded w-20" />
+                      ) : (
+                        <p className="text-xs text-gray-500">Indexed ✓</p>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -176,72 +238,83 @@ export default function PlaygroundPage() {
           </Button>
         </aside>
 
-        {/* Right Panel: Notebook/Chat */}
-        <main className="flex-1 flex bg-white dark:bg-gray-900 flex-col h-full">
+        {/* Middle Panel: AI Summary */}
+        <section className="col-span-4 border-r border-gray-200 dark:border-gray-800 p-6 flex flex-col">
+          <h2 className="text-xl font-bold mb-4">AI Summary</h2>
+          {isSummaryLoading ? (
+            <div className="flex justify-center items-center flex-1 text-gray-500">
+              <Loader className="w-6 h-6 animate-spin mr-2" /> Generating
+              summary...
+            </div>
+          ) : summary ? (
+            <div className="overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm text-sm leading-relaxed">
+              {summary}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Add sources to generate an AI summary.
+            </p>
+          )}
+        </section>
+
+        {/* Right Panel: Chat */}
+        <main className="col-span-5 flex flex-col">
           <div
             ref={chatWindowRef}
-            className="flex-grow overflow-y-auto p-6 md:p-8 space-y-6"
+            className="flex-grow overflow-y-auto p-6 space-y-6"
           >
             {chatHistory.length === 0 && (
               <div className="text-center text-gray-500 mt-20">
-                <h2 className="text-3xl font-bold">Playground</h2>
+                <h2 className="text-2xl font-bold">Chat with AI</h2>
                 <p className="mt-2">
-                  Add sources and ask questions to get started.
+                  Ask questions about your sources after reviewing the summary.
                 </p>
               </div>
             )}
+
             {chatHistory.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex ${
+                className={`flex gap-3 ${
                   msg.sender === "user" ? "justify-end" : "justify-start"
                 }`}
               >
+                {msg.sender === "bot" && (
+                  <div className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+                    <Bot className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  </div>
+                )}
                 <div
-                  className={`max-w-2xl p-4 rounded-xl shadow-sm ${
+                  className={`max-w-md p-4 rounded-xl shadow-sm ${
                     msg.sender === "user"
-                      ? "bg-black text-white dark:bg-white dark:text-black"
-                      : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-800 text-black dark:text-white"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
-                      <h4 className="text-sm font-semibold mb-2">
-                        Retrieved Sources:
-                      </h4>
-                      <div className="space-y-2">
-                        {msg.sources.map((source) => (
-                          <div
-                            key={source.id}
-                            className="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded-md"
-                            title={source.source}
-                          >
-                            <p className="font-bold flex items-center gap-1.5">
-                              <SourceIcon
-                                type={source.sourceType}
-                                className="w-4 h-4"
-                              />{" "}
-                              {source.source}
-                            </p>
-                           
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
+                  <p className="text-xs mt-2 opacity-70">
+                    {msg.timestamp?.toLocaleTimeString()}
+                  </p>
                 </div>
+                {msg.sender === "user" && (
+                  <div className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-800">
+                    <User className="w-5 h-5 text-indigo-700 dark:text-indigo-200" />
+                  </div>
+                )}
               </div>
             ))}
-          </div>
-          <div className="p-4 md:p-6 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+
             {isLoading && (
-              <div className="flex items-center justify-center mb-2 gap-2 text-gray-500 text-sm">
+              <div className="flex justify-start gap-2 items-center text-gray-500 text-sm">
                 <Loader className="w-4 h-4 animate-spin" />
                 <span>{loadingMessage}</span>
               </div>
             )}
-            <div className="relative max-w-3xl mx-auto">
+          </div>
+
+          {/* Chat Input */}
+          <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+            <div className="relative max-w-3xl mx-auto flex items-center">
               <Textarea
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
@@ -251,8 +324,8 @@ export default function PlaygroundPage() {
                     handleSendMessage();
                   }
                 }}
-                className="w-full p-4 pr-14 rounded-xl resize-none bg-white dark:bg-gray-900"
-                placeholder="Ask a question about your sources..."
+                className="w-full p-4 pr-14 rounded-xl resize-none bg-gray-50 dark:bg-gray-800 text-sm"
+                placeholder="Ask a question..."
                 rows={1}
               />
               <Button
@@ -265,18 +338,16 @@ export default function PlaygroundPage() {
             </div>
           </div>
         </main>
-
-        {isSourceModalOpen && <AddSourceModal />}
-
-        {toastMessage && (
-          <div className="fixed bottom-5 right-5 bg-gray-900 text-white py-2 px-4 rounded-lg shadow-lg flex items-center gap-2">
-            {toastMessage.message}
-            <button onClick={() => setToastMessage(null)}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
+
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 bg-gray-900 text-white py-2 px-4 rounded-lg shadow-lg flex items-center gap-2">
+          {toastMessage.message}
+          <button onClick={() => setToastMessage(null)}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </>
   );
 }
