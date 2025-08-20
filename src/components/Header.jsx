@@ -75,13 +75,13 @@ function Header() {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-          <Link
+          {/* <Link
             href="/about"
             className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
           >
             <User className="h-4 w-4" />
             About
-          </Link>
+          </Link> */}
           <Link
             href="/dashboard"
             className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
@@ -156,14 +156,14 @@ function Header() {
         <div className="md:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 transition-colors duration-300">
           <div className="container mx-auto px-4 py-4">
             <nav className="flex flex-col space-y-4">
-              <Link
+              {/* <Link
                 href="/about"
                 className="flex items-center gap-2 text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 py-2 transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 <User className="h-5 w-5" />
                 About
-              </Link>
+              </Link> */}
               <Link
                 href="/dashboard"
                 className="flex items-center gap-2 text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 py-2 transition-colors"

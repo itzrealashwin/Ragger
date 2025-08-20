@@ -11,7 +11,7 @@ import { TaskType, GoogleGenerativeAI } from "@google/generative-ai";
  * and then generates a summary of that document's content.
  */
 export async function POST(req) {
-    const { sourceText } = await req.json();
+    const { sourceText, collectionName     } = await req.json();
 
     if (!sourceText || typeof sourceText !== 'string') {
         return NextResponse.json(
@@ -33,17 +33,17 @@ export async function POST(req) {
             {
                 url: process.env.QDRANT_URL,
                 apiKey: process.env.QDRANT_API_KEY,
-                collectionName: "ragCollection",
+                collectionName: collectionName,
             }
         );
 
         const queryEmbedding = await embeddings.embedQuery(sourceText);
-        const result = await vectorStore.client.search("ragCollection", {
+        const result = await vectorStore.client.search(collectionName, {
             vector: queryEmbedding,
             limit: 1,
             with_payload: true,
         });
-        console.log(result);
+        // console.log(result);
 
         // FIX: The payload field from our setup is 'text', not 'content'.
         if (!result || result.length === 0 || !result[0].payload?.content) {

@@ -14,7 +14,7 @@ import OpenAI from "openai";
  */
 export async function POST(req) {
   // 1. Extract the user's query from the request body
-  const { userQuery } = await req.json();
+  const { userQuery, collectionName } = await req.json();
 
   if (!userQuery) {
     return NextResponse.json(
@@ -38,16 +38,17 @@ export async function POST(req) {
       {
         url: process.env.QDRANT_URL,
         apiKey: process.env.QDRANT_API_KEY,
-        collectionName: "ragCollection", // Matching the collection name from your indexing route
+        collectionName: collectionName, // Matching the collection name from your indexing route
       }
     );
 
     // 4. Create a retriever to search for the top 3 most relevant documents
-    const retriever = vectorStore.asRetriever({ k: 10 });
+    const retriever = vectorStore.asRetriever({ k: 3 });
 
     // 5. Retrieve the relevant chunks (documents) from Qdrant
     const relevantChunks = await retriever.invoke(userQuery);
-
+    console.log("Relevant Chunks", relevantChunks);
+    
     // 6. Construct a clear system prompt with the retrieved context
    const SYSTEM_PROMPT = `
 ROLE & CORE INSTRUCTION:
@@ -178,7 +179,8 @@ Remember: STRICT JSON, NO HALLUCINATION, CONTEXT ONLY.
       ],
       response_format: { type: "json_object" },
     });
-
+    console.log(JSON.stringify(response));
+    
     // 9. Return the AI's response and the sources that were used
     return NextResponse.json({
       response: response.choices[0].message.content,

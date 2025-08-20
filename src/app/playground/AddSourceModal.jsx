@@ -23,6 +23,8 @@ const AddSourceModal = ({
     setIsSourceModalOpen,
     onAddSource,
     onRemoveSource, // New prop to handle removal on error
+
+    collectionName
 }) => {
     const [textSource, setTextSource] = useState("");
     const [urlSource, setUrlSource] = useState("");
@@ -35,52 +37,59 @@ const AddSourceModal = ({
         }
     }, []);
 
-    const handleIndexSource = async (formData) => {
-        const file = formData.get('file');
-        const url = formData.get('url');
-        const text = formData.get('text');
-        const sourceTypeRaw = formData.get('sourceType') || '';
+   const handleIndexSource = async (formData) => {
+    // Make sure your component receives `collectionName` as a prop
+    // For example: const AddSourceModal = ({ ..., collectionName }) => { ... }
 
-        // Determine a unique name for the source to track it
-        const sourceName = file?.name || url || (text ? `${text.slice(0, 40)}...` : 'Pasted Text');
-        const sourceType = sourceTypeRaw.charAt(0).toUpperCase() + sourceTypeRaw.slice(1);
+    // Append the collectionName to the formData
+    if (collectionName) {
+        formData.append("collectionName", collectionName);
+    } else {
+        console.error("Collection name is missing!");
+        alert("Cannot index source: No collection is selected.");
+        return; // Stop the function if there's no collection name
+    }
 
-        // Immediately add a temporary source with a loading state to the parent
-        const tempSource = { name: sourceName, type: sourceType, loading: true };
+    const file = formData.get('file');
+    const url = formData.get('url');
+    const text = formData.get('text');
+    const sourceTypeRaw = formData.get('sourceType') || '';
+
+    const sourceName = file?.name || url || (text ? `${text.slice(0, 40)}...` : 'Pasted Text');
+    const sourceType = sourceTypeRaw.charAt(0).toUpperCase() + sourceTypeRaw.slice(1);
+
+    const tempSource = { name: sourceName, type: sourceType, loading: true };
+    if (typeof onAddSource === 'function') {
+        onAddSource(tempSource);
+    }
+
+    setIsSourceModalOpen(false);
+
+    try {
+        const response = await fetch('/api/index', {
+            method: 'POST',
+            body: formData, // formData now includes the collectionName
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to index source.');
+        }
+
+        const finalSource = { name: sourceName, type: sourceType, loading: false };
         if (typeof onAddSource === 'function') {
-            onAddSource(tempSource);
+            onAddSource(finalSource);
         }
 
-        // Close modal. The global loader is not used here to show the skeleton loader instead.
-        setIsSourceModalOpen(false);
-
-        try {
-            const response = await fetch('/api/index', {
-                method: 'POST',
-                body: formData,
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to index source.');
-            }
-
-            // On success, update the source to remove the loading state
-            const finalSource = { name: sourceName, type: sourceType, loading: false };
-            if (typeof onAddSource === 'function') {
-                onAddSource(finalSource);
-            }
-
-        } catch (error) {
-            console.error('❌ Error indexing source:', error);
-            alert(error.message || 'Something went wrong while indexing source.');
-            // On error, remove the temporary source from the list
-            if (typeof onRemoveSource === 'function') {
-                onRemoveSource(sourceName);
-            }
+    } catch (error) {
+        console.error('❌ Error indexing source:', error);
+        alert(error.message || 'Something went wrong while indexing source.');
+        if (typeof onRemoveSource === 'function') {
+            onRemoveSource(sourceName);
         }
-    };
+    }
+};
 
     const handleAddText = () => {
         if (!textSource.trim()) return;
