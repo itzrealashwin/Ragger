@@ -1,36 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+**🚀 RAG Project with Next.js, Clerk, and Qdrant**
 
-## Getting Started
+A Retrieval-Augmented Generation (RAG) application built with Next.js.
+It combines Clerk (authentication), Qdrant (vector database), and Google’s Generative AI (embeddings + LLM responses) to provide a question-answering system that can reason over your own data.
 
-First, run the development server:
+✨ Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Source Indexing: Upload files (PDF, CSV), paste raw text, or provide a URL to index content into Qdrant.
+
+Chat Interface: Ask natural language questions about your indexed data.
+
+Authentication: Secure sign-in and user management powered by Clerk.
+
+Scalable Vector Search: Efficient and scalable similarity search with Qdrant.
+
+🔧 Use Cases
+
+📝 Personal Knowledge Base – Store and query your notes, articles, and documents.
+
+🤖 Customer Support Bot – Train on product documentation for instant support.
+
+🔍 Research Assistant – Search and synthesize from a corpus of papers.
+
+📚 Educational Tool – Let students query their course materials interactively.
+
+📡 API Structure
+1. /api/index
+
+Method: POST
+
+Handles indexing of new data sources into Qdrant.
+```
+Request Body:
+
+{
+  "sourceType": "text | file | url",
+  "text": "optional - raw text",
+  "file": "optional - pdf/csv file",
+  "url": "optional - webpage url"
+}
+
+
+Response:
+
+// Success
+{ "success": true, "message": "Indexing of [sourceName] done." }
+
+// Error
+{ "error": "Bad Request / Internal Server Error" }
+```
+2. /api/chat
+
+Method: POST
+
+Retrieves relevant context from Qdrant and generates an AI-powered answer.
+```
+Request Body:
+
+{
+  "userQuery": "What is retrieval-augmented generation?"
+}
+
+
+Response:
+
+{
+  "response": "The generated answer.",
+  "sources": [
+    { "source": "pasted-text", "page_content": "..." }
+  ]
+}
+```
+⚙️ Getting Started
+📌 Prerequisites
+
+Node.js 18+
+
+npm / yarn
+
+Clerk Account
+
+Qdrant Cloud Account
+
+Google AI Studio API Key
+
+📥 Installation
+```
+git clone <your-repository-url>
+cd <your-repository-name>
+npm install
+```
+🔑 Environment Variables
+
+Create .env.local in the root directory:
+```
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Google Generative AI
+GOOGLE_API_KEY=AIzaSy...
+
+# Qdrant Vector Database
+QDRANT_URL=https://...
+QDRANT_API_KEY=...
+
+# Optional
+OAUTH_URL=...
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Get your keys from:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Clerk → Dashboard → API Keys
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Google AI → AI Studio → Get API Key
 
-## Learn More
+Qdrant → Cloud Dashboard
 
-To learn more about Next.js, take a look at the following resources:
+▶️ Running the App
+```
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then open: http://localhost:3000
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+🔐 Authentication
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Clerk is used for secure authentication & user management.
+Make sure to configure callback URLs and settings in the Clerk Dashboard according to your deployment environment.
