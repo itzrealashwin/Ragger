@@ -16,6 +16,7 @@ import {
   Sun,
   Bot,
   Database,
+  Sparkles,
   MessageSquare,
   FileText,
   User,
@@ -60,13 +61,17 @@ function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-md transition-colors duration-300">
       <div className="container mx-auto h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <div className="flex items-center">
-            <span className="text-5xl font-bold font-cursive bg-gradient-to-r from-gray-900 to-indigo-700 dark:from-gray-100 dark:to-indigo-300 bg-clip-text text-transparent">
-              Ragger
-            </span>
-          </div>
-        </Link>
+         <Link href="/" className="flex items-center gap-3 group">
+      {/* Icon */}
+      <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-500 dark:from-indigo-400 dark:to-purple-300 shadow-md group-hover:scale-110 transition-transform duration-300">
+        <Sparkles className="w-6 h-6 text-white" />
+      </div>
+
+      {/* Text */}
+      <span className="text-3xl font-extrabold bg-gradient-to-r from-gray-900 via-indigo-700 to-purple-600 dark:from-gray-100 dark:via-indigo-300 dark:to-purple-400 bg-clip-text text-transparent tracking-tight">
+        Ragger
+      </span>
+    </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">

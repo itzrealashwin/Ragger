@@ -171,7 +171,7 @@ Remember: STRICT JSON, NO HALLUCINATION, CONTEXT ONLY.
 
     // 8. Generate a response using the chat model
     const response = await openai.chat.completions.create({
-      model: "gemini-2.5-pro",
+      model: "gemini-2.0-flash",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userQuery },
